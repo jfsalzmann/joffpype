@@ -5,11 +5,9 @@ from inspect import getsource, isclass, stack
 from itertools import takewhile
 from textwrap import dedent
 
-SUB_IDENT = '_'
-
 def check_name(item):
     if isinstance(item, Name):
-        if item.id == SUB_IDENT:
+        if item.id == '_':
             return True
     return False
 
@@ -17,6 +15,19 @@ def check_starred(item):
     if isinstance(item, Starred):
         return check_name(item.value)
 
+def handle_atom(col, i, repl):
+    if check_name(col[i]):
+        col[i] = repl
+    elif check_starred(col[i]):
+        col[i].value = repl
+
+def handle_atomm(left, atom):
+    if isinstance(atom, Name):
+        return left
+    if isinstance(atom, Starred):
+        atom.value = left
+    
+    return atom
 
 class MyTransform(NodeTransformer):
     def handle_node(self, left, right):
@@ -24,40 +35,40 @@ class MyTransform(NodeTransformer):
         # _.attr
         if isinstance(right, Attribute):
             if check_name(right.value):
-                right.value = self.visit(left)
+                right.value = left
             return True
 
         # _[x]
         if isinstance(right, Subscript):
             if check_name(right.value):
-                right.value = self.visit(left)
-            # else:
-            #     self.handle_node(left, right.value)
+                right.value = left
+            else:
+                self.handle_node(left, right.value)
             return True
 
         # _ + x
         # x + _
         if isinstance(right, BinOp):
-            self.handle_node(left, right.left)
-            self.handle_node(left, right.right)
-            # self.visit()
+            if check_name(right.left):
+                right.left = left
+            elif check_starred(right.left):
+                right.left.value = left
+            else:
+                self.handle_node(left, right.left)
+            if check_name(right.right):
+                right.right = left
+            elif check_starred(right.right):
+                right.right.value = left
+            else:
+                self.handle_node(left, right.right)
             return True
-            # if isinstance(right.left, Name):
-            #     if right.left.id == SUB_IDENT:
-            #         right.left = self.visit(left)
-
-            #         return True
-            # if isinstance(right.right, Name):
-            #     if right.right.id == SUB_IDENT:
-            #         right.right = self.visit(left)
-            #         return True
 
         if isinstance(right, Call):
 
             # _.func
             if isinstance(right.func, Attribute):
                 if check_name(right.func.value):
-                    right.func.value = self.visit(left)
+                    right.func.value = left
                     return True
                 else:
                     return self.handle_node(left, right.func.value)
@@ -67,10 +78,10 @@ class MyTransform(NodeTransformer):
             # func(x, y, _, z)
             for i, arg in enumerate(right.args):
                 if check_name(arg):
-                    right.args[i] = self.visit(left)
+                    right.args[i] = left
                     once = True
                 elif check_starred(arg):
-                    right.args[i].value = self.visit(left)
+                    right.args[i].value = left
                     once = True
                 else:
                     if self.handle_node(left, arg):
@@ -79,10 +90,10 @@ class MyTransform(NodeTransformer):
             # func(a=x, b=y, c=_, d=z)
             for i, arg in enumerate(right.keywords):
                 if check_name(arg.value):
-                    right.keywords[i].value = self.visit(left)
+                    right.keywords[i].value = left
                     once = True
                 elif check_starred(arg.value):
-                    right.keywords[i].value.value = self.visit(left)
+                    right.keywords[i].value.value = left
                     once = True
                 else:
                     if self.handle_node(left, arg):
@@ -99,12 +110,11 @@ class MyTransform(NodeTransformer):
 
                 # 5 >> [x, y, _, z]
                 if check_name(el):
-                    right.elts[i] = self.visit(left)
+                    right.elts[i] = left
 
                 # (1, 2) >> [x, y, *_, z]
                 elif check_starred(el):
-                    right.elts[i].value = self.visit(left)
-                    once = True
+                    right.elts[i].value = left
 
                 else:
                     self.handle_node(left, el)
@@ -114,17 +124,19 @@ class MyTransform(NodeTransformer):
         if isinstance(right, JoinedStr):
             for i, fvalue in enumerate(right.values):
                 if check_name(fvalue.value):
-                    right.values[i].value = self.visit(left)
+                    right.values[i].value = left
                 elif check_starred(fvalue.value):
-                    right.values[i].value.value = self.visit(left)
+                    right.values[i].value.value = left
                 else:
                     self.handle_node(left, fvalue.value)
             return True
 
+        # Comprehensions and Generators
+        # [x for x in _]
         if isinstance(right, (ListComp, SetComp, DictComp, GeneratorExp)):
             for i, gen in enumerate(right.generators):
                 if check_name(gen.iter):
-                    gen.iter = self.visit(left)
+                    gen.iter = left
                 else:
                     self.handle_node(left, gen.iter)
 
@@ -133,39 +145,23 @@ class MyTransform(NodeTransformer):
         return False
 
     def visit_BinOp(self, node):
-        print(dump(node, indent=4))
-        print('---')
-
-        left, op, right = node.left, node.op, node.right
+        left, op, right = self.visit(node.left), node.op, node.right
         if isinstance(op, (LShift, RShift)):
+
             if self.handle_node(left, right):
-                return node.right
+                return right
+
             # Convert function name / lambda etc without braces into call
             if isinstance(right, Call):
-                print("-- texas style")
+
                 # Rewrite a >> b(...) as b(a, ...)
                 right.args.insert(
                     0 if isinstance(op, RShift) else len(right.args),
                     left)
-                return self.visit(right)
+                return right
 
-            # if isinstance(right, Name):
-            #     print("looks like it's up to me now")
-            #     return Call(
-            #         func=right,
-            #         args=[self.visit(left)],
-            #         keywords=[],
-            #         starargs=None,
-            #         kwargs=None,
-            #         lineno=right.lineno,
-            #         col_offset=right.col_offset
-            #     )
-
-            # return node
-
-            print(f"-- it's up to me now")
-
-            return self.visit(Call(
+            # Rewrite a >> f as f(a)
+            return Call(
                 func=right,
                 args=[left],
                 keywords=[],
@@ -173,13 +169,10 @@ class MyTransform(NodeTransformer):
                 kwargs=None,
                 lineno=right.lineno,
                 col_offset=right.col_offset
-            ))
+            )
                 
         else:
             return node
-
-
-# from pipeop import pipes
 
 def pipes(func_or_class):
     if isclass(func_or_class):
@@ -204,9 +197,6 @@ def pipes(func_or_class):
         if hasattr(node, "col_offset"):
             node.col_offset += source_indent
 
-    # Update name of function or class to compile
-    #tree.body[0].name = decorated_name
-
     # remove the pipe decorator so that we don't recursively
     # call it again. The AST node for the decorator will be a
     # Call if it had braces, and a Name if it had no braces.
@@ -219,10 +209,6 @@ def pipes(func_or_class):
 
     # Apply the visit_BinOp transformation
     tree = MyTransform().visit(tree)
-
-    print("- final -")
-    print(dump(tree, indent=4))
-    print("---")
 
     # now compile the AST into an altered function or class definition
     code = compile(
@@ -237,206 +223,208 @@ def pipes(func_or_class):
     # return the modified function or class - original is never called
     return ctx[tree.body[0].name]
 
-# @pipes
-# def foo():
-#     return [1,2,3,4,5] << filter(lambda x: x%2==0) >> list >> _.index(4)
+@pipes
+def foo():
+    return [1,2,3,4,5] << filter(lambda x: x%2==0) >> list >> _.index(4)
 
-# print(foo())
+print(foo())
 
-# @pipes
-# def baz():
-#     return 5 >> _.__mul__(2) >> _.bit_length()
+@pipes
+def baz():
+    return 5 >> _.__mul__(2) >> _.bit_length()
 
-# print(baz())
+print(baz())
 
-# @pipes
-# def bar():
-#     return 1 >> (_, 5)
+@pipes
+def bar():
+    return 1 >> (_, 5)
 
-# @pipes
-# def ff():
-#     1 >> _+10 >> _*6 >> print(55, _, 77)
+@pipes
+def ff():
+    1 >> _+10 >> _*6 >> print(55, _, 77)
 
-# ff()
+ff()
 
-# @pipes
-# def qq():
-#     [1, 2, 3] >> [1, *_] >> print(1, *_, 5)
+@pipes
+def qq():
+    [1, 2, 3] >> [1, *_] >> print(1, *_, 5)
 
-# qq()
+qq()
 
-# @pipes
-# def tt():
-#     10 >> _**3>> [_] >> print
+@pipes
+def tt():
+    10 >> _**3>> [_] >> print
 
-# tt()
+tt()
 
-# @pipes
-# def ee():
-#     10 >> [1, _, 100] >> f"the list: {_}" >> print
+@pipes
+def ee():
+    10 >> [1, _, 100] >> f"the list: {_}" >> print
 
-# ee()
+ee()
 
-# pylint: disable=undefined-variable
-# @pipes
-# def cc():
-#     range(-5, 5) \
-#     << map(lambda x: x + 1) \
-#     << map(abs) \
-#     >> [-10, *_] \
-#     >> f"thing: {_}" \
-#     >> print
+#pylint: disable=undefined-variable
+@pipes
+def cc():
+    range(-5, 5) \
+    << map(lambda x: x + 1) \
+    << map(abs) \
+    >> [-10, *_] \
+    >> f"thing: {_}" \
+    >> print
 
-# # cc()
+# cc()
 
-# square = lambda x: x * x
+square = lambda x: x * x
 
-# @pipes
-# def pogchamp():
-#     for x in range(10) << map(square):
-#         print(x) # Alternatively: x >> print
+@pipes
+def pogchamp():
+    for x in range(10) << map(square):
+        print(x) # Alternatively: x >> print
 
-# # pogchamp()
-
-# # @pipes
-# # def pp():
-# #     5 >> [_, _, 7, _] >> print(_, _)
-
-# # pp()
+# pogchamp()
 
 # @pipes
-# def xx():
-#     range(10) >> sorted >> reversed >> list >> _[2] >> print
+# def pp():
+#     5 >> [_, _, 7, _] >> print(_, _)
 
-# xx()
+# pp()
 
-# from random import random
+@pipes
+def xx():
+    range(10) >> sorted >> reversed >> list >> _[2] >> print
 
-# @pipes
-# def rando():
-#     range(10) << map(lambda x: random()) >> sum >> print
+xx()
 
-# rando()
+from random import random
 
-# @pipes
-# def slices():
-#     {"a": 3, "b": 9} >> _["a"] >> print
+@pipes
+def rando():
+    range(10) << map(lambda x: random()) >> sum >> print
 
-# slices()
+rando()
 
-# @pipes
-# def swap():
-#     [1, 2] >> [_[1], _[0]] >> print
+@pipes
+def slices():
+    {"a": 3, "b": 9} >> _["a"] >> print
 
-# swap()
+slices()
 
-# @pipes
-# def recurse():
-#     [1, 2] >> [_[0], [_[1], _[0] + 1 * 7]] >> print
+@pipes
+def swap():
+    [1, 2] >> [_[1], _[0]] >> print
 
-# recurse()
+swap()
+
+@pipes
+def recurse():
+    [1, 2] >> [_[0], [_[1], _[0] + 3]] >> print
+
+recurse()
 
 
-# @pipes
-# def kwargs_():
-#     range(10) >> {str(x) : x for x in _} >> print
+@pipes
+def kwargs_():
+    range(10) >> {str(x) : x for x in _} >> print
 
-# kwargs_()
+kwargs_()
 
-# @pipes
-# def extra_args():
-#     range(3) >> list >> print([[_]], [_[1]], _[0])
+@pipes
+def extra_args():
+    range(3) >> list >> print([[_]], [_[1]], _[0] + 2)
 
-# extra_args()
+extra_args()
 
-# @pipes
-# def fstring_complex():
-#     range(-5, 10) >> list >> dict(a=9, b="xyz", c=_) >> {k : v for k, v in _.items() if k in ['a', 'c']} >> f"num: {_['c'][3]}" >> print
+@pipes
+def fstring_complex():
+    range(-5, 10) >> list >> dict(a=9, b="xyz", c=_) >> {k : v for k, v in _.items() if k in ['a', 'c']} >> f"num: {_['c'][3]}" >> print
 
-# fstring_complex()
+fstring_complex()
 
-# @pipes
-# def fstring_in_print():
-#     5 >> print(f"{_}")
+@pipes
+def fstring_in_print():
+    5 >> print(f"{_}")
 
-# fstring_in_print()
+fstring_in_print()
 
-# @pipes
-# def aaa():
-#     {'a': 5} >> _['a'].bit_length() >> print
+@pipes
+def aaa():
+    {'a': 5} >> _['a'].bit_length() >> print
 
-# aaa()
-
-# # @pipes
-# # def get_user(user_id) -> User:
-# #     return {'user_id': user_id} >> database.get >> UserSchema.load
-
-# @pipes
-# def list_to_list():
-#     [0, 10] >> range(*_) >> list >> print
-
-# list_to_list()
-
-# square = lambda x: x * x
-# even = lambda x: x % 2 == 0
+aaa()
 
 # @pipes
-# def forloop():
-#     return range(100) << filter(even) << map(square) >> list
+# def get_user(user_id) -> User:
+#     return {'user_id': user_id} >> database.get >> UserSchema.load
 
-# def forloop_standard():
-#     return list(map(square, filter(even, range(100))))
+@pipes
+def list_to_list():
+    [0, 10] >> range(*_) >> list >> print
 
-# from functools import reduce
-
-# @pipes
-# def factorial(n):
-#     return range(1, n + 1) >> reduce(lambda a,b: a*b, _, 1)
-
-# @pipes
-# def main():
-#     forloop() >> print
-#     factorial(0) >> f"0! = {_}" >> print
-#     factorial(3) >> f"3! = {_}" >> print
-#     factorial(5) >> f"5! = {_}" >> print
-
-# main()
-
-# @pipes
-# def gen():
-#     return range(10) >> (y for y in _)
-
-# print(list(gen()))
-
-# @pipes
-# def slicing():
-#     "abcdef" >> _[1:-1] >> print
-
-# slicing()
-
-# @pipes
-# def sets():
-#     5 >> {1, _, 7} >> print
-
-# sets()
-
-# @pipes
-# def setcomp():
-#     range(5) >> {x for x in _} >> {-1, *_} >> print
-
-# setcomp()
+list_to_list()
 
 square = lambda x: x * x
 even = lambda x: x % 2 == 0
 
-# @pipes
-# def nice():
-#     range(-5, 10) << map(square) << filter(even) >> list >> (_[3], _[1], _[2]) >> print
+@pipes
+def forloop():
+    return range(100) << filter(even) << map(square) >> list
 
-# nice()
+def forloop_standard():
+    return list(map(square, filter(even, range(100))))
+
+from functools import reduce
+
+@pipes
+def factorial(n):
+    return range(1, n + 1) >> reduce(lambda a,b: a*b, _, 1)
+
+@pipes
+def main():
+    forloop() >> print
+    factorial(0) >> f"0! = {_}" >> print
+    factorial(3) >> f"3! = {_}" >> print
+    factorial(5) >> f"5! = {_}" >> print
+
+main()
+
+@pipes
+def gen():
+    return range(10) >> (y for y in _)
+
+print(list(gen()))
+
+@pipes
+def slicing():
+    "abcdef" >> _[1:-1] >> print
+
+slicing()
+
+@pipes
+def sets():
+    5 >> {1, _, 7} >> print
+
+sets()
+
+@pipes
+def setcomp():
+    range(5) >> {x for x in _} >> {-1, *_} >> print
+
+setcomp()
+
+square = lambda x: x * x
+even = lambda x: x % 2 == 0
+
+@pipes
+def nice():
+    range(-5, 10) << map(square) << filter(even) >> list >> (_[3], _[1], _[2]) >> print
+
+nice()
+
+ident = lambda x: x
 
 @pipes
 def x():
-    range(10) << map(square) >> list >> (_[1], _[4])
+    range(20) << map(ident) >> list >> (_,_) >> print
 
 x()
