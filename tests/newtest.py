@@ -1,6 +1,6 @@
 
 from ast import Call, parse, Name, NodeTransformer, LShift, RShift, \
-    increment_lineno, walk, Attribute, BinOp, dump, List, Tuple, Starred, JoinedStr, Subscript
+    increment_lineno, walk, Attribute, BinOp, dump, List, Tuple, Starred, JoinedStr, Subscript, ListComp, DictComp, GeneratorExp, Set, SetComp
 from inspect import getsource, isclass, stack
 from itertools import takewhile
 from textwrap import dedent
@@ -19,105 +19,162 @@ def check_starred(item):
 
 
 class MyTransform(NodeTransformer):
-    
-    def handle_tuple_list(self, L, replace):
-        if isinstance(L, (Tuple, List)):
-            for i, el in enumerate(L.elts):
+    def handle_node(self, left, right):
+
+        # _.attr
+        if isinstance(right, Attribute):
+            if check_name(right.value):
+                right.value = self.visit(left)
+            return True
+
+        # _[x]
+        if isinstance(right, Subscript):
+            if check_name(right.value):
+                right.value = self.visit(left)
+            # else:
+            #     self.handle_node(left, right.value)
+            return True
+
+        # _ + x
+        # x + _
+        if isinstance(right, BinOp):
+            self.handle_node(left, right.left)
+            self.handle_node(left, right.right)
+            # self.visit()
+            return True
+            # if isinstance(right.left, Name):
+            #     if right.left.id == SUB_IDENT:
+            #         right.left = self.visit(left)
+
+            #         return True
+            # if isinstance(right.right, Name):
+            #     if right.right.id == SUB_IDENT:
+            #         right.right = self.visit(left)
+            #         return True
+
+        if isinstance(right, Call):
+
+            # _.func
+            if isinstance(right.func, Attribute):
+                if check_name(right.func.value):
+                    right.func.value = self.visit(left)
+                    return True
+                else:
+                    return self.handle_node(left, right.func.value)
+
+            once = False
+
+            # func(x, y, _, z)
+            for i, arg in enumerate(right.args):
+                if check_name(arg):
+                    right.args[i] = self.visit(left)
+                    once = True
+                elif check_starred(arg):
+                    right.args[i].value = self.visit(left)
+                    once = True
+                else:
+                    if self.handle_node(left, arg):
+                        once = True
+
+            # func(a=x, b=y, c=_, d=z)
+            for i, arg in enumerate(right.keywords):
+                if check_name(arg.value):
+                    right.keywords[i].value = self.visit(left)
+                    once = True
+                elif check_starred(arg.value):
+                    right.keywords[i].value.value = self.visit(left)
+                    once = True
+                else:
+                    if self.handle_node(left, arg):
+                        once = True
+
+            # True if we modified something
+            # Otherwise the enclosing scope
+            # Needs to add the arg, depending on >> or <<
+            return once
+
+        # Lists, Tuples, and Sets
+        if isinstance(right, (List, Tuple, Set)):
+            for i, el in enumerate(right.elts):
+
+                # 5 >> [x, y, _, z]
                 if check_name(el):
-                    L.elts[i] = self.visit(replace)
-                    return True
-                if check_starred(el):
-                    L.elts[i].value = self.visit(replace)
-                    return True
+                    right.elts[i] = self.visit(left)
+
+                # (1, 2) >> [x, y, *_, z]
+                elif check_starred(el):
+                    right.elts[i].value = self.visit(left)
+                    once = True
+
+                else:
+                    self.handle_node(left, el)
+            return True
+
+        # f-strings
+        if isinstance(right, JoinedStr):
+            for i, fvalue in enumerate(right.values):
+                if check_name(fvalue.value):
+                    right.values[i].value = self.visit(left)
+                elif check_starred(fvalue.value):
+                    right.values[i].value.value = self.visit(left)
+                else:
+                    self.handle_node(left, fvalue.value)
+            return True
+
+        if isinstance(right, (ListComp, SetComp, DictComp, GeneratorExp)):
+            for i, gen in enumerate(right.generators):
+                if check_name(gen.iter):
+                    gen.iter = self.visit(left)
+                else:
+                    self.handle_node(left, gen.iter)
+
+            return True
+
         return False
 
-    # def handle_binop(node):
-
-
     def visit_BinOp(self, node):
-        # print(dump(node, indent=4))
-        # print('---')
-        if isinstance(node.op, (LShift, RShift)):
-            if isinstance(node.right, Attribute):
-                if isinstance(node.right.value, Name):
-                    if node.right.value.id == SUB_IDENT:
-                        node.right.value = self.visit(node.left)
-                        return node.right
+        print(dump(node, indent=4))
+        print('---')
 
-            if isinstance(node.right, Subscript):
-                if check_name(node.right.value):
-                    node.right.value = self.visit(node.left)
-                    return node.right
-
-            if isinstance(node.right, BinOp):
-                if isinstance(node.right.left, Name):
-                    if node.right.left.id == SUB_IDENT:
-                        node.right.left = self.visit(node.left)
-                        return node.right
-                if isinstance(node.right.right, Name):
-                    if node.right.right.id == SUB_IDENT:
-                        node.right.right = self.visit(node.left)
-                        return node.right
-
-            if isinstance(node.right, Call):
-
-                # _.func
-                if isinstance(node.right.func, Attribute):
-                    if isinstance(node.right.func.value, Name):
-                        if node.right.func.value.id == SUB_IDENT:
-                            node.right.func.value = self.visit(node.left)
-                            return node.right
-
-                # func(x, y, _, z)
-                for i, arg in enumerate(node.right.args):
-                    if check_name(arg):
-                        node.right.args[i] = self.visit(node.left)
-                        return node.right
-                    
-                    if check_starred(arg):
-                        node.right.args[i].value = self.visit(node.left)
-                        return node.right
-
-            # Lists and Tuples
-            if isinstance(node.right, (List, Tuple)):
-                for i, el in enumerate(node.right.elts):
-
-                    # 5 >> [x, y, _, z]
-                    if check_name(el):
-                        node.right.elts[i] = self.visit(node.left)
-                        return node.right
-
-                    # (1, 2) >> [x, y, *_, z]
-                    if check_starred(el):
-                        node.right.elts[i].value = self.visit(node.left)
-                        return node.right
-
-            if isinstance(node.right, JoinedStr):
-                for i, fvalue in enumerate(node.right.values):
-                    if check_name(fvalue.value):
-                        node.right.values[i].value = self.visit(node.left)
-                        return node.right
-                    if check_starred(fvalue.value):
-                        node.right.values[i].value.value = self.visit(node.left)
-                        return node.right
-
+        left, op, right = node.left, node.op, node.right
+        if isinstance(op, (LShift, RShift)):
+            if self.handle_node(left, right):
+                return node.right
             # Convert function name / lambda etc without braces into call
-            if not isinstance(node.right, Call):
-                return self.visit(Call(
-                    func=node.right,
-                    args=[node.left],
-                    keywords=[],
-                    starargs=None,
-                    kwargs=None,
-                    lineno=node.right.lineno,
-                    col_offset=node.right.col_offset
-                ))
-            
-            # Rewrite a >> b(...) as b(a, ...)
-            node.right.args.insert(
-                0 if isinstance(node.op, RShift) else len(node.right.args),
-                node.left)
-            return self.visit(node.right)
+            if isinstance(right, Call):
+                print("-- texas style")
+                # Rewrite a >> b(...) as b(a, ...)
+                right.args.insert(
+                    0 if isinstance(op, RShift) else len(right.args),
+                    left)
+                return self.visit(right)
+
+            # if isinstance(right, Name):
+            #     print("looks like it's up to me now")
+            #     return Call(
+            #         func=right,
+            #         args=[self.visit(left)],
+            #         keywords=[],
+            #         starargs=None,
+            #         kwargs=None,
+            #         lineno=right.lineno,
+            #         col_offset=right.col_offset
+            #     )
+
+            # return node
+
+            print(f"-- it's up to me now")
+
+            return self.visit(Call(
+                func=right,
+                args=[left],
+                keywords=[],
+                starargs=None,
+                kwargs=None,
+                lineno=right.lineno,
+                col_offset=right.col_offset
+            ))
+                
         else:
             return node
 
@@ -163,7 +220,9 @@ def pipes(func_or_class):
     # Apply the visit_BinOp transformation
     tree = MyTransform().visit(tree)
 
-    # print(dump(tree))
+    print("- final -")
+    print(dump(tree, indent=4))
+    print("---")
 
     # now compile the AST into an altered function or class definition
     code = compile(
@@ -219,48 +278,165 @@ def pipes(func_or_class):
 # ee()
 
 # pylint: disable=undefined-variable
-@pipes
-def cc():
-    range(-5, 5) \
-    << map(lambda x: x + 1) \
-    << map(abs) \
-    >> [-10, *_] \
-    >> f"thing: {_}" \
-    >> print
+# @pipes
+# def cc():
+#     range(-5, 5) \
+#     << map(lambda x: x + 1) \
+#     << map(abs) \
+#     >> [-10, *_] \
+#     >> f"thing: {_}" \
+#     >> print
 
-# cc()
+# # cc()
 
-square = lambda x: x * x
-
-@pipes
-def pogchamp():
-    for x in range(10) << map(square):
-        print(x) # Alternatively: x >> print
-
-# pogchamp()
+# square = lambda x: x * x
 
 # @pipes
-# def pp():
-#     5 >> [_, _, 7, _] >> print(_, _)
+# def pogchamp():
+#     for x in range(10) << map(square):
+#         print(x) # Alternatively: x >> print
 
-# pp()
+# # pogchamp()
+
+# # @pipes
+# # def pp():
+# #     5 >> [_, _, 7, _] >> print(_, _)
+
+# # pp()
+
+# @pipes
+# def xx():
+#     range(10) >> sorted >> reversed >> list >> _[2] >> print
+
+# xx()
+
+# from random import random
+
+# @pipes
+# def rando():
+#     range(10) << map(lambda x: random()) >> sum >> print
+
+# rando()
+
+# @pipes
+# def slices():
+#     {"a": 3, "b": 9} >> _["a"] >> print
+
+# slices()
+
+# @pipes
+# def swap():
+#     [1, 2] >> [_[1], _[0]] >> print
+
+# swap()
+
+# @pipes
+# def recurse():
+#     [1, 2] >> [_[0], [_[1], _[0] + 1 * 7]] >> print
+
+# recurse()
+
+
+# @pipes
+# def kwargs_():
+#     range(10) >> {str(x) : x for x in _} >> print
+
+# kwargs_()
+
+# @pipes
+# def extra_args():
+#     range(3) >> list >> print([[_]], [_[1]], _[0])
+
+# extra_args()
+
+# @pipes
+# def fstring_complex():
+#     range(-5, 10) >> list >> dict(a=9, b="xyz", c=_) >> {k : v for k, v in _.items() if k in ['a', 'c']} >> f"num: {_['c'][3]}" >> print
+
+# fstring_complex()
+
+# @pipes
+# def fstring_in_print():
+#     5 >> print(f"{_}")
+
+# fstring_in_print()
+
+# @pipes
+# def aaa():
+#     {'a': 5} >> _['a'].bit_length() >> print
+
+# aaa()
+
+# # @pipes
+# # def get_user(user_id) -> User:
+# #     return {'user_id': user_id} >> database.get >> UserSchema.load
+
+# @pipes
+# def list_to_list():
+#     [0, 10] >> range(*_) >> list >> print
+
+# list_to_list()
+
+# square = lambda x: x * x
+# even = lambda x: x % 2 == 0
+
+# @pipes
+# def forloop():
+#     return range(100) << filter(even) << map(square) >> list
+
+# def forloop_standard():
+#     return list(map(square, filter(even, range(100))))
+
+# from functools import reduce
+
+# @pipes
+# def factorial(n):
+#     return range(1, n + 1) >> reduce(lambda a,b: a*b, _, 1)
+
+# @pipes
+# def main():
+#     forloop() >> print
+#     factorial(0) >> f"0! = {_}" >> print
+#     factorial(3) >> f"3! = {_}" >> print
+#     factorial(5) >> f"5! = {_}" >> print
+
+# main()
+
+# @pipes
+# def gen():
+#     return range(10) >> (y for y in _)
+
+# print(list(gen()))
+
+# @pipes
+# def slicing():
+#     "abcdef" >> _[1:-1] >> print
+
+# slicing()
+
+# @pipes
+# def sets():
+#     5 >> {1, _, 7} >> print
+
+# sets()
+
+# @pipes
+# def setcomp():
+#     range(5) >> {x for x in _} >> {-1, *_} >> print
+
+# setcomp()
+
+square = lambda x: x * x
+even = lambda x: x % 2 == 0
+
+# @pipes
+# def nice():
+#     range(-5, 10) << map(square) << filter(even) >> list >> (_[3], _[1], _[2]) >> print
+
+# nice()
 
 @pipes
-def xx():
-    range(10) >> sorted >> reversed >> list >> _[2] >> print
+def x():
+    range(10) << map(square) >> list >> (_[1], _[4])
 
-xx()
-
-from random import random
-
-@pipes
-def rando():
-    range(10) << map(lambda x: random()) >> sum >> print
-
-rando()
-
-@pipes
-def slices():
-    {"a": 3, "b": 9} >> _["a"] >> print
-
-slices()
+x()
