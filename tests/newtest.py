@@ -1,6 +1,6 @@
 
 from ast import Call, parse, Name, NodeTransformer, LShift, RShift, \
-    increment_lineno, walk, Attribute, BinOp, dump, List, Tuple, Starred, JoinedStr
+    increment_lineno, walk, Attribute, BinOp, dump, List, Tuple, Starred, JoinedStr, Subscript
 from inspect import getsource, isclass, stack
 from itertools import takewhile
 from textwrap import dedent
@@ -31,15 +31,24 @@ class MyTransform(NodeTransformer):
                     return True
         return False
 
+    # def handle_binop(node):
+
+
     def visit_BinOp(self, node):
         # print(dump(node, indent=4))
         # print('---')
         if isinstance(node.op, (LShift, RShift)):
-            # if isinstance(node.right, Attribute):
-            #     if isinstance(node.right.value, Name):
-            #         if node.right.value.id == PLACEHOLDER:
-            #             node.right.value = node.left
-            #             return self.visit(node.right)
+            if isinstance(node.right, Attribute):
+                if isinstance(node.right.value, Name):
+                    if node.right.value.id == SUB_IDENT:
+                        node.right.value = self.visit(node.left)
+                        return node.right
+
+            if isinstance(node.right, Subscript):
+                if check_name(node.right.value):
+                    node.right.value = self.visit(node.left)
+                    return node.right
+
             if isinstance(node.right, BinOp):
                 if isinstance(node.right.left, Name):
                     if node.right.left.id == SUB_IDENT:
@@ -49,6 +58,7 @@ class MyTransform(NodeTransformer):
                     if node.right.right.id == SUB_IDENT:
                         node.right.right = self.visit(node.left)
                         return node.right
+
             if isinstance(node.right, Call):
 
                 # _.func
@@ -58,41 +68,29 @@ class MyTransform(NodeTransformer):
                             node.right.func.value = self.visit(node.left)
                             return node.right
 
-                once = False
-
                 # func(x, y, _, z)
                 for i, arg in enumerate(node.right.args):
                     if check_name(arg):
                         node.right.args[i] = self.visit(node.left)
-                        once = True
+                        return node.right
                     
                     if check_starred(arg):
                         node.right.args[i].value = self.visit(node.left)
-                        once = True
-
-                if once:
-                    return node.right
+                        return node.right
 
             # Lists and Tuples
             if isinstance(node.right, (List, Tuple)):
-                once = False
                 for i, el in enumerate(node.right.elts):
 
                     # 5 >> [x, y, _, z]
                     if check_name(el):
                         node.right.elts[i] = self.visit(node.left)
-                        once = True
+                        return node.right
 
                     # (1, 2) >> [x, y, *_, z]
                     if check_starred(el):
                         node.right.elts[i].value = self.visit(node.left)
-                        once = True
-
-                    # if isinstance(el, BinOp):
-                    #     self.visit(el)
-
-                if once:
-                    return node.right
+                        return node.right
 
             if isinstance(node.right, JoinedStr):
                 for i, fvalue in enumerate(node.right.values):
@@ -239,10 +237,30 @@ def pogchamp():
     for x in range(10) << map(square):
         print(x) # Alternatively: x >> print
 
-pogchamp()
+# pogchamp()
+
+# @pipes
+# def pp():
+#     5 >> [_, _, 7, _] >> print(_, _)
+
+# pp()
 
 @pipes
-def pp():
-    5 >> [_, _, 7, _ + 7] >> print
+def xx():
+    range(10) >> sorted >> reversed >> list >> _[2] >> print
 
-pp()
+xx()
+
+from random import random
+
+@pipes
+def rando():
+    range(10) << map(lambda x: random()) >> sum >> print
+
+rando()
+
+@pipes
+def slices():
+    {"a": 3, "b": 9} >> _["a"] >> print
+
+slices()
