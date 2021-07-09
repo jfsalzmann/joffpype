@@ -74,6 +74,8 @@ class _PipeTransformer(NodeTransformer):
                 right.func.value, _ = self.handle_atom(left, right.func.value)
                 return True
 
+            once = False
+
             for col in [right.args, right.keywords]:
                 for i, arg in enumerate(col):
                     col[i], mod = self.handle_atom(left, arg)
