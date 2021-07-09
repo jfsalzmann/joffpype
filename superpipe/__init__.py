@@ -2,12 +2,12 @@
 
 
 import typing
-
 from ast import (
     AST,
     Attribute,
     BinOp,
     Call,
+    Dict,
     DictComp,
     FormattedValue,
     GeneratorExp,
@@ -26,8 +26,6 @@ from ast import (
     increment_lineno,
     parse,
     walk,
-    dump,
-    Dict
 )
 from inspect import getsource, isclass, stack
 from itertools import takewhile
@@ -90,7 +88,6 @@ class _PipeTransformer(NodeTransformer):
                 right.args[i], mod = self.handle_atom(left, arg)
                 once |= mod
 
-            
             for i, arg in enumerate(right.keywords):
                 right.keywords[i].value, mod = self.handle_atom(left, arg.value)
                 once |= mod
@@ -105,7 +102,7 @@ class _PipeTransformer(NodeTransformer):
             for i, el in enumerate(right.elts):
                 right.elts[i], _ = self.handle_atom(left, el)
             return True
-        
+
         # Dictionaries
         if isinstance(right, Dict):
             for col in [right.keys, right.values]:
@@ -198,7 +195,10 @@ def pipes(func_or_class):
     tree.body[0].decorator_list = [
         dec
         for dec in tree.body[0].decorator_list
-        if isinstance(dec, Call) and dec.func.id != "pipes" or isinstance(dec, Name) and dec.id != "pipes"
+        if isinstance(dec, Call)
+        and dec.func.id != "pipes"
+        or isinstance(dec, Name)
+        and dec.id != "pipes"
     ]
 
     # Apply the visit_BinOp transformation
