@@ -1,6 +1,8 @@
 """Implements an @pipes operator that transforms the >> and << to act similarly to Elixir pipes"""
 
 
+import typing
+
 from ast import (
     AST,
     Attribute,
@@ -24,6 +26,8 @@ from ast import (
     increment_lineno,
     parse,
     walk,
+    dump,
+    Dict
 )
 from inspect import getsource, isclass, stack
 from itertools import takewhile
@@ -31,7 +35,7 @@ from textwrap import dedent
 
 
 class _PipeTransformer(NodeTransformer):
-    def handle_atom(self, left: AST, atom: AST) -> AST:
+    def handle_atom(self, left: AST, atom: AST) -> typing.Tuple[AST, bool]:
         """
         Handle an "atom".
         Recursively replaces all instances of `_` and `*_`
@@ -39,6 +43,8 @@ class _PipeTransformer(NodeTransformer):
         if isinstance(atom, Name):
             if atom.id == "_":
                 return left, True
+            else:
+                return atom, False
         elif isinstance(atom, Starred):
             atom.value, mod = self.handle_atom(left, atom.value)
             return atom, mod
@@ -57,8 +63,8 @@ class _PipeTransformer(NodeTransformer):
 
         # _.attr or _[x]
         if isinstance(right, (Attribute, Subscript)):
-            right.value, _ = self.handle_atom(left, right.value)
-            return True
+            right.value, mod = self.handle_atom(left, right.value)
+            return mod
 
         # _ + x
         # x + _
@@ -71,15 +77,23 @@ class _PipeTransformer(NodeTransformer):
 
             # _.func
             if isinstance(right.func, Attribute):
-                right.func.value, _ = self.handle_atom(left, right.func.value)
-                return True
+                right.func.value, mod = self.handle_atom(left, right.func.value)
+
+                # Only exit if we substituted the value of the call
+                # Otherwise, we need to process the arguments
+                if mod:
+                    return True
 
             once = False
 
-            for col in [right.args, right.keywords]:
-                for i, arg in enumerate(col):
-                    col[i], mod = self.handle_atom(left, arg)
-                    once |= mod
+            for i, arg in enumerate(right.args):
+                right.args[i], mod = self.handle_atom(left, arg)
+                once |= mod
+
+            
+            for i, arg in enumerate(right.keywords):
+                right.keywords[i].value, mod = self.handle_atom(left, arg.value)
+                once |= mod
 
             # True if we modified something
             # Otherwise the enclosing scope
@@ -90,6 +104,13 @@ class _PipeTransformer(NodeTransformer):
         if isinstance(right, (List, Tuple, Set)):
             for i, el in enumerate(right.elts):
                 right.elts[i], _ = self.handle_atom(left, el)
+            return True
+        
+        # Dictionaries
+        if isinstance(right, Dict):
+            for col in [right.keys, right.values]:
+                for i, item in enumerate(col):
+                    col[i], _ = self.handle_atom(left, item)
             return True
 
         # f-strings
@@ -113,7 +134,7 @@ class _PipeTransformer(NodeTransformer):
         Visitor method for BinOps. Returns the AST that takes the place of the input expression.
         """
         left, op, right = self.visit(node.left), node.op, node.right
-        if isinstance(op, (LShift, RShift)):
+        if isinstance(op, RShift):
 
             if self.handle_node(left, right):
                 return right
@@ -121,8 +142,10 @@ class _PipeTransformer(NodeTransformer):
             # Convert function name / lambda etc without braces into call
             if isinstance(right, Call):
 
-                # Rewrite a >> b(...) as b(a, ...)
-                right.args.insert(0 if isinstance(op, RShift) else len(right.args), left)
+                print("texas style")
+
+                # Rewrite a >> f(...) as f(..., a)
+                right.args.append(left)
                 return right
 
             # Rewrite a >> f as f(a)
@@ -175,9 +198,9 @@ def pipes(func_or_class):
     # The location of the decorator function name in these
     # nodes is slightly different.
     tree.body[0].decorator_list = [
-        d
-        for d in tree.body[0].decorator_list
-        if isinstance(d, Call) and d.func.id != "pipes" or isinstance(d, Name) and d.id != "pipes"
+        dec
+        for dec in tree.body[0].decorator_list
+        if isinstance(dec, Call) and dec.func.id != "pipes" or isinstance(dec, Name) and dec.id != "pipes"
     ]
 
     # Apply the visit_BinOp transformation
