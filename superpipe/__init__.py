@@ -62,14 +62,20 @@ class _PipeTransformer(NodeTransformer):
         # _.attr or _[x]
         if isinstance(right, (Attribute, Subscript)):
             right.value, mod = self.handle_atom(left, right.value)
-            return mod
+
+            # If we modified the attribute (this doesn't really apply to subscripts)
+            # Then we can return the right side, however if we didn't it may need to be
+            # Transformed into a function call
+            # e.g. 5 >> Class.method
+            if mod:
+                return right
 
         # _ + x
         # x + _
         if isinstance(right, BinOp):
             right.left, _ = self.handle_atom(left, right.left)
             right.right, _ = self.handle_atom(left, right.right)
-            return True
+            return right
 
         if isinstance(right, Call):
 
@@ -80,71 +86,57 @@ class _PipeTransformer(NodeTransformer):
                 # Only exit if we substituted the value of the call
                 # Otherwise, we need to process the arguments
                 if mod:
-                    return True
+                    return right
 
-            once = False
+            modified = False
 
             for i, arg in enumerate(right.args):
                 right.args[i], mod = self.handle_atom(left, arg)
-                once |= mod
+                modified |= mod
 
             for i, arg in enumerate(right.keywords):
                 right.keywords[i].value, mod = self.handle_atom(left, arg.value)
-                once |= mod
+                modified |= mod
 
-            # True if we modified an argument
-            # Otherwise the enclosing scope
-            # Needs to add an arg to the call
-            return once
+            # If we didn't modify any arguments
+            # Then we need to insert the left side
+            # Into the arguments
+            if not modified:
+                right.args.append(left)
+
+            return right
 
         # Lists, Tuples, and Sets
         if isinstance(right, (List, Tuple, Set)):
             for i, el in enumerate(right.elts):
                 right.elts[i], _ = self.handle_atom(left, el)
-            return True
+            return right
 
         # Dictionaries
         if isinstance(right, Dict):
             for col in [right.keys, right.values]:
                 for i, item in enumerate(col):
                     col[i], _ = self.handle_atom(left, item)
-            return True
+            return right
 
         # f-strings
         if isinstance(right, JoinedStr):
             for i, fvalue in enumerate(right.values):
                 if isinstance(fvalue, FormattedValue):
                     right.values[i].value, _ = self.handle_atom(left, fvalue.value)
-            return True
+            return right
 
         # Comprehensions and Generators
         # [x for x in _]
         if isinstance(right, (ListComp, SetComp, DictComp, GeneratorExp)):
             for i, gen in enumerate(right.generators):
                 gen.iter, _ = self.handle_atom(left, gen.iter)
-            return True
+            return right
 
-        return False
-
-    def visit_BinOp(self, node: BinOp) -> AST:
-        """
-        Visitor method for BinOps. Returns the AST that takes the place of the input expression.
-        """
-        left, op, right = self.visit(node.left), node.op, node.right
-        if isinstance(op, RShift):
-
-            if self.handle_node(left, right):
-                return right
-
-            # Convert function name / lambda etc without braces into call
-            if isinstance(right, Call):
-
-                # Rewrite a >> f(...) as f(..., a)
-                right.args.append(left)
-                return right
-
-            # Rewrite a >> f as f(a)
-            return Call(
+        # If nothing else, we assume that we need to convert the right side into a function call
+        # e.g. 5 >> print
+        # This will break if the symbol is not callable, as is expected
+        return Call(
                 func=right,
                 args=[left],
                 keywords=[],
@@ -154,6 +146,13 @@ class _PipeTransformer(NodeTransformer):
                 col_offset=right.col_offset,
             )
 
+    def visit_BinOp(self, node: BinOp) -> AST:
+        """
+        Visitor method for BinOps. Returns the AST that takes the place of the input expression.
+        """
+        left, op, right = self.visit(node.left), node.op, node.right
+        if isinstance(op, RShift):
+            return self.handle_node(left, right)
         return node
 
 
