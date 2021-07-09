@@ -50,20 +50,29 @@ class TestClasses(TestCase):
         assert TestClasses.PipedClass().foo() == (3).bit_length()
 
 
+# fmt: off
 class TestIntegration(TestCase):
     @pipes
     def test(self):
-        assert 3 >> _ * 4 >> (lambda x: x + 3) >> [1, _, 3, _] >> sorted >> filter(
-            lambda x: x % 2 != 0
-        ) >> map(lambda x: x * x) >> list >> [77, 5, 6] + [_[2]] >> sum >> _ + 9 >> {
-            "a": 4 + _ + 5
-        } >> _[
-            "a"
-        ] >> _.bit_length() >> pow(
-            _, 2
-        ) == pow(
-            (331).bit_length(), 2
+        assert(
+            3
+            >> _ * 4
+            >> (lambda x: x + 3)
+            >> [1, _, 3, _]
+            >> sorted
+            >> filter(lambda x: x % 2 != 0)
+            >> map(lambda x: x * x)
+            >> list
+            >> [77, 5, 6] + [_[2]]
+            >> sum
+            >> _ + 9
+            >> {"a": 4 + _ + 5}
+            >> _["a"]
+            >> _.bit_length()
+            >> pow(_, 2)
+            == pow((331).bit_length(), 2)
         )
+# fmt: on
 
 
 class TestFunctionCalls(TestCase):
