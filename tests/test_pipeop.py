@@ -38,9 +38,13 @@ class PipeOpTestCase(unittest.TestCase):
 
     @pipes
     def test_multiline(self):
-        assert (
-            range(-5, 0) << map(lambda x: x + 1) << map(abs) << map(str) >> tuple
-        ) == ("4", "3", "2", "1", "0")
+        assert (range(-5, 0) << map(lambda x: x + 1) << map(abs) << map(str) >> tuple) == (
+            "4",
+            "3",
+            "2",
+            "1",
+            "0",
+        )
 
     @pipes
     def test_lambda_no_braces(self):

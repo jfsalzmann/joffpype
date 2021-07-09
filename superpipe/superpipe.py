@@ -1,13 +1,30 @@
-"""
-   Implement a @pipes decorator that converts the << and >> operators
-   to mimic Elixir pipes.
-"""
+"""Implements an @pipes operator that transforms the >> and << to act similarly to Elixir pipes"""
 
 
-from ast import (AST, Attribute, BinOp, Call, DictComp, FormattedValue,
-                 GeneratorExp, JoinedStr, List, ListComp, LShift, Name,
-                 NodeTransformer, RShift, Set, SetComp, Starred, Subscript,
-                 Tuple, increment_lineno, parse, walk)
+from ast import (
+    AST,
+    Attribute,
+    BinOp,
+    Call,
+    DictComp,
+    FormattedValue,
+    GeneratorExp,
+    JoinedStr,
+    List,
+    ListComp,
+    LShift,
+    Name,
+    NodeTransformer,
+    RShift,
+    Set,
+    SetComp,
+    Starred,
+    Subscript,
+    Tuple,
+    increment_lineno,
+    parse,
+    walk,
+)
 from inspect import getsource, isclass, stack
 from itertools import takewhile
 from textwrap import dedent
@@ -103,9 +120,7 @@ class _PipeTransformer(NodeTransformer):
             if isinstance(right, Call):
 
                 # Rewrite a >> b(...) as b(a, ...)
-                right.args.insert(
-                    0 if isinstance(op, RShift) else len(right.args), left
-                )
+                right.args.insert(0 if isinstance(op, RShift) else len(right.args), left)
                 return right
 
             # Rewrite a >> f as f(a)
@@ -160,19 +175,14 @@ def pipes(func_or_class):
     tree.body[0].decorator_list = [
         d
         for d in tree.body[0].decorator_list
-        if isinstance(d, Call)
-        and d.func.id != "pipes"
-        or isinstance(d, Name)
-        and d.id != "pipes"
+        if isinstance(d, Call) and d.func.id != "pipes" or isinstance(d, Name) and d.id != "pipes"
     ]
 
     # Apply the visit_BinOp transformation
     tree = _PipeTransformer().visit(tree)
 
     # now compile the AST into an altered function or class definition
-    code = compile(
-        tree, filename=(ctx["__file__"] if "__file__" in ctx else "repl"), mode="exec"
-    )
+    code = compile(tree, filename=(ctx["__file__"] if "__file__" in ctx else "repl"), mode="exec")
 
     # and execute the definition in the original context so that the
     # decorated function can access the same scopes as the original
