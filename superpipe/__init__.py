@@ -137,14 +137,14 @@ class _PipeTransformer(NodeTransformer):
         # e.g. 5 >> print
         # This will break if the symbol is not callable, as is expected
         return Call(
-                func=right,
-                args=[left],
-                keywords=[],
-                starargs=None,
-                kwargs=None,
-                lineno=right.lineno,
-                col_offset=right.col_offset,
-            )
+            func=right,
+            args=[left],
+            keywords=[],
+            starargs=None,
+            kwargs=None,
+            lineno=right.lineno,
+            col_offset=right.col_offset,
+        )
 
     def visit_BinOp(self, node: BinOp) -> AST:
         """
