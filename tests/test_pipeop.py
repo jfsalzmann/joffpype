@@ -1,4 +1,5 @@
 import unittest
+
 from pipeop import pipes
 
 
@@ -11,7 +12,6 @@ def add3(a, b, c):
 
 
 class PipeOpTestCase(unittest.TestCase):
-
     @pipes
     def test_pipe_one_arg(self):
         assert [1, 2, 3] >> sum() == 6
@@ -39,16 +39,12 @@ class PipeOpTestCase(unittest.TestCase):
     @pipes
     def test_multiline(self):
         assert (
-            range(-5, 0)
-            << map(lambda x: x + 1)
-            << map(abs)
-            << map(str)
-            >> tuple
-        ) == ('4', '3', '2', '1', '0')
+            range(-5, 0) << map(lambda x: x + 1) << map(abs) << map(str) >> tuple
+        ) == ("4", "3", "2", "1", "0")
 
     @pipes
     def test_lambda_no_braces(self):
-        assert 5 << (lambda a: a**2) == 25
+        assert 5 << (lambda a: a ** 2) == 25
 
     def test_method_no_braces(self):
         cup = ClassUsingPipes()
@@ -87,9 +83,4 @@ class ClassUsingPipes2(object):
         return a >> pow(a)
 
     def foo(self):
-        return (
-            range(-2, 2)
-            << map(abs)
-            << sum
-            << self.squared
-            >> add2(self.zero))
+        return range(-2, 2) << map(abs) << sum << self.squared >> add2(self.zero)
