@@ -1,4 +1,4 @@
-"""Implements an @pipes operator that transforms the >> and << to act similarly to Elixir pipes"""
+"""Implements an @pipes operator that transforms the >> operator to act similarly to Elixir pipes"""
 
 
 import typing
