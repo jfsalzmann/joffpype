@@ -1,6 +1,11 @@
+from os import path, sys
+
+# Fix import location
+sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
+
 import unittest
 
-from pipeop import pipes
+from superpipe import pipes
 
 
 def add2(a, b):
@@ -88,3 +93,7 @@ class ClassUsingPipes2(object):
 
     def foo(self):
         return range(-2, 2) << map(abs) << sum << self.squared >> add2(self.zero)
+
+
+if __name__ == "__main__":
+    unittest.main()
