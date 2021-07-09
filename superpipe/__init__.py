@@ -92,9 +92,9 @@ class _PipeTransformer(NodeTransformer):
                 right.keywords[i].value, mod = self.handle_atom(left, arg.value)
                 once |= mod
 
-            # True if we modified something
+            # True if we modified an argument
             # Otherwise the enclosing scope
-            # Needs to add the arg, depending on >> or <<
+            # Needs to add an arg to the call
             return once
 
         # Lists, Tuples, and Sets
@@ -183,9 +183,6 @@ def pipes(func_or_class):
     for node in walk(tree):
         if hasattr(node, "col_offset"):
             node.col_offset += source_indent
-
-    # Update name of function or class to compile
-    # tree.body[0].name = decorated_name
 
     # remove the pipe decorator so that we don't recursively
     # call it again. The AST node for the decorator will be a
