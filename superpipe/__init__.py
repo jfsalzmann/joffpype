@@ -142,8 +142,6 @@ class _PipeTransformer(NodeTransformer):
             # Convert function name / lambda etc without braces into call
             if isinstance(right, Call):
 
-                print("texas style")
-
                 # Rewrite a >> f(...) as f(..., a)
                 right.args.append(left)
                 return right
