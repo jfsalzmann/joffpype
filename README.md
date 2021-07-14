@@ -1,4 +1,4 @@
-## Superipe: Elixir-style Pipes for Python
+## Superpipe: Elixir-style Pipes for Python
 
 In the Elixir programming language the `|>` pipe operator allows you to chain 
 together multiple function calls to avoid nesting. It allows for this:
