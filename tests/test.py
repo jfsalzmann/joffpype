@@ -50,10 +50,31 @@ class TestClasses(TestCase):
         assert TestClasses.PipedClass().foo() == (3).bit_length()
 
 
-# fmt: off
-class TestIntegration(TestCase):
-    @pipes
+@pipes
+class TestMisc(TestCase):
     def test(self):
+        assert 5 >> 2 ** _ >> _.bit_length() == 6
+
+    def test_idempotent(self):
+        assert 1 >> _ >> _ >> _ == 1
+
+    def test_loops(self):
+        L = []
+        for x in range(5) >> map(lambda x: x + 2):
+            L.append(x)
+
+        assert L == [2, 3, 4, 5, 6]
+
+        x = 10
+        count = 0
+        while x >> _ > 0:
+            count += 1
+            x -= 1
+        
+        assert count == 10
+
+# fmt: off
+    def test_complex(self):
         assert(
             3
             >> _ * 4
@@ -132,6 +153,9 @@ class TestComprehensions(TestCase):
         assert gen_eq(range(5) >> (x for x in _), range(5))
         assert gen_eq(range(3) >> (x * x for x in _), (x for x in [0, 1, 4]))
 
+    @pipes
+    def test_nested(self):
+        assert [x+1 for x in range(3) >> map(lambda x: x + 1)] == [2, 3, 4]
 
 class TestCollections(TestCase):
     @pipes
