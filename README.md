@@ -13,7 +13,7 @@ to be writen as this:
 1 |> a(2) |> b(3, 4) |> c()
 ```
 
-Superipe implements a more powerful version of this operator in Python, the superpipe operator (henceforth, just "the pipe operator").
+Superpipe implements a more powerful version of this operator in Python, the superpipe operator (henceforth, just "the pipe operator").
 
 Superpipe allows you to turn heavily-nested code into easily-readable flows of data from left to right.
 
