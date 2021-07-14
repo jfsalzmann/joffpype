@@ -1,103 +1,140 @@
-## Elixir–Style Pipes for Python
+## Superipe: Elixir-style Pipes for Python
 
 In the Elixir programming language the `|>` pipe operator allows you to chain 
-together multiple function calls so that this:
+together multiple function calls to avoid nesting. It allows for this:
 
-```$elixir 
+```elixir 
 c(b(a(1, 2), 3, 4))
 ```
 
-can be written more readably as:
+to be writen as this:
 
-```$elixir
+```elixir
 1 |> a(2) |> b(3, 4) |> c()
 ```
 
-All the pipe operator does is pass its left operand as the first argument of
-the right operand, so that `a |> b(...)` becomes `b(a, ...)`.
+Superipe implements a more powerful version of this operator in Python, the superpipe operator (henceforth, just "the pipe operator").
 
-Various pipe implementations in Python to date allow a list of functions to be
-applied to an initial value, but do not support the partial, missing first
-argument syntax of Elixir.
+Superpipe allows you to turn heavily-nested code into easily-readable flows of data from left to right.
 
-This library provides a function decorator that causes Python `>>` right shift
-operators within the function to act exactly like Elixir pipes:
+For example:
 
-```$python
-from pipeop import pipes
-
-def add(a, b):
-    return a + b
-    
-def times(a, b):
-    return a * b
-    
-@pipes
-def calc():
-    print 1 >> add(2) >> times(3)  # prints 9
-``` 
-
-Functions can have any number of arguments:
-
-```$python
-def add3(a, b, c):
-    return a + b + c
-    
-@pipes
-def calc():
-    print 1 >> add3(2, 3)  # prints 6
+```python
+# Take all the numbers [0, 100) that have an odd-number bit length, square them, and print the result
+print("The numbers:", map(lambda x: x * x, filter(lambda x: x.bit_length() % 2 != 0, range(100))))
 ```
 
-In Elixir libraries the first argument of a function is chosen with pipes in
-mind but this is (obviously) not the case in Python - for instance the
-enumerable args of `map` and `reduce` are first in their Elixir equivalents
-but last in Python. For this reason I've also redefined the left shift
-operator `<<` to _append_ it's left operand to the list of call arguments of
-the right operand:
+Using superpipe:
 
-```$python
-@pipes
-def my_pow():
-  print 2 >> pow(3)  # prints 8
-  print 2 << pow(3)  # prints 9
+```python
+range(100) >> filter(lambda x: x.bit_length() % 2 != 0) >> map(lambda x: x * x) >> print("The numbers:", _)
 ```
 
-You can drop the braces for functions or lambdas (enclosed in braces) with a single argument:
+## Tutorial
 
-```$python
+```py
+# To begin using the pipe operator, you need to import the decorator
+
+from superpipe import pipes
+
+# And then apply it to a function, method, or class
+
 @pipes
-def sum(self):
-    print [1, 2, 3] >> sum  # prints 6
-    print 1 >> (lambda x: x + 1)  # prints 2
+def foo():
+    5 >> print
+
+@pipes
+class Bar:
+    def __init__(self):
+        self.qux = 5 >> _ * 2
+
+class Loq:
+    @pipes
+    def vaz():
+        "superpipes!" >> print
 ```
 
-In Elixir pipes are often laid out one per line. In Python you need brackets to do the
-same thing without line continuations, but it still looks pretty neat:
+```py
+# The @pipes decorator transforms the right-shift operator >> into the pipe operator
+# You insert it between two expressions to inject the value of the lefthand side into the right
 
-```$python
-@pipes
-def pretty_pipe():
-    print (
-        range(-5, 0)
-        << map(lambda x: x + 1)
-        << map(abs)
-        << map(str)
-        >> tuple
-    )  # prints ('4', '3', '2', '1', '0')
+# The simplest example is to pass the lefthand side as a function argument
+
+5 >> print
+# The same as print(5)
+
+5 >> print()
+# Also the same as print(5)
+
+# The pipe operator always adds the argument to the end of argument list
+
+5 >> print("abc,")
+# This prints "abc, 5"
+
+range(3) >> map(lambda x: x)
+# This is the same as map(lambda x: x, range(3))
 ```
 
-The decorator can also be applied to a class to decorate all the methods in that class.
+```py
+# > But I don't want it to be the last argument!
+# You can use the special implicit substitution identifier "_" (an underscore)
+# Superpipe will substitute the lefthand side into where-ever it finds it
 
-Normally there should be a small amount of processing overhead on the first time the
-function is defined due to the function being recompiled and cached. Otherwise there should be
-no difference to the performance of the conventionally nested call code.
+5 >> print(_, "abc")
+# This prints "5 abc"
 
-This is initial alpha code. It has been tested on Python 2.7.14 and 3.6.5 using
-simple functions. Source line attributes are preserved so debuggers should be
-able to follow the code as it executes. Pull requests and bug reports
-gratefully accepted.
+5 >> print(_)
+# This is the same as earlier
 
-Robin Hilliard
+5 >> print(_, _)
+# Prints "5 5"
+```
 
-_PS: Thanks to https://github.com/Stvad for submitting the first issue 
-with some great suggestions._
+```py
+# > But I want to call a method on the lefthand side!
+# You can do this via the _ identifier. In fact, you can use the underscore almost anywhere
+
+"superpipe" >> _.title()
+# This is the same as "superpipe".title()
+
+5 >> _ + 1
+# The same as 5 + 1
+
+[1, 2, 3] >> _[0]
+# This gets the first element out of the list
+
+def foo(a, b, c):
+    pass
+
+{"c": 1, "a": 2, "b": 3} >> foo(**_)
+# You can use star-expansion on _!
+
+for x in range(3) >> map(lambda x: x * x):
+    pass
+# You can use superpipes in loops!
+
+print(
+    5
+    >> _ + 1
+    >> _ * _
+)
+# In some contexts Python syntax allows for spreading over multiple lines, like in a function call
+# In other contexts, you can use a backslash (\) to split the line over multiple
+# This prints 36
+
+# You may be surprised at the number of things superpipe can do
+# Try things out, and check out `tests/test.py` for a demonstration of everything it can do
+```
+
+## How it Works and Performance Considerations
+
+When the pipe decorator is applied to a function it grabs the source code using the inspect module, parses it using the ast module, performs recursive transformations on the tree, and then substitutes the original function with the result.
+
+Generally speaking, code written using superpipe will perform the same as writing the nested code explicitly, with two major caveats:
+
+1. The first time Python evaluates your function and the decorator runs, there is a small overhead due to the AST transformations. This overhead should be relatively low and a one-time cost, happening only the first time the function is seen.
+2. The pipe operator does not optimize for multiple _ substitutions in the same expression. When the decorator encounters the substitution identifier it substitutes all of the code to the left into the expression. When it has to do multiple such substitutions the lefthand side will be evaluated multiple times. For example, `5*5 >> print(_)` becomes `print(5*5)`, however `5*5 >> print(5*5, 5*5)`, thus performing the calculation twice, whereas one could write it more efficiently as `twentyfive = 5*5; print(twentyfive, twentyfive)`. This example is trivial, but gets worse the more nesting there is. This can be avoided by carefully considering where you perform multiple substitutions, and breaking up long chains into multiple.
+
+---
+
+Thank you to Robin Hilliard for the original inspiration for this project, the one from which this one was forked. Please consider visiting his implementation here: [robinhilliard/pipes](https://github.com/robinhilliard/pipes).
