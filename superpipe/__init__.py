@@ -31,7 +31,8 @@ from inspect import getsource, isclass, stack
 from itertools import takewhile
 from textwrap import dedent
 
-SUB_IDENT: str = '_'
+SUB_IDENT: str = "_"
+
 
 class _PipeTransformer(NodeTransformer):
     def handle_atom(self, left: AST, atom: AST) -> typing.Tuple[AST, bool]:
@@ -165,6 +166,17 @@ class _PipeTransformer(NodeTransformer):
         return node
 
 
+def is_pipes_decorator(dec: AST) -> bool:
+    if isinstance(dec, Name):
+        return dec.id == "pipes"
+    if isinstance(dec, Attribute):
+        if isinstance(dec.value, Name):
+            return dec.value.id == "superpipe" and dec.attr == "pipes"
+    if isinstance(dec, Call):
+        return is_pipes_decorator(dec.func)
+    return False
+
+
 # pylint: disable=exec-used
 def pipes(func_or_class):
     """
@@ -198,12 +210,7 @@ def pipes(func_or_class):
     # The location of the decorator function name in these
     # nodes is slightly different.
     tree.body[0].decorator_list = [
-        dec
-        for dec in tree.body[0].decorator_list
-        if isinstance(dec, Call)
-        and dec.func.id != "pipes"
-        or isinstance(dec, Name)
-        and dec.id != "pipes"
+        dec for dec in tree.body[0].decorator_list if not is_pipes_decorator(dec)
     ]
 
     # Apply the visit_BinOp transformation
