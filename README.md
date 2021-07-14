@@ -143,6 +143,10 @@ Generally speaking, code written using superpipe will perform the same as writin
 1. The first time Python evaluates your function and the decorator runs, there is a small overhead due to the AST transformations. This overhead should be relatively low and a one-time cost, happening only the first time the function is seen.
 2. The pipe operator does not optimize for multiple _ substitutions in the same expression. When the decorator encounters the substitution identifier it substitutes all of the code to the left into the expression. When it has to do multiple such substitutions the lefthand side will be evaluated multiple times. For example, `5*5 >> print(_)` becomes `print(5*5)`, however `5*5 >> print(5*5, 5*5)`, thus performing the calculation twice, whereas one could write it more efficiently as `twentyfive = 5*5; print(twentyfive, twentyfive)`. This example is trivial, but gets worse the more nesting there is. This can be avoided by carefully considering where you perform multiple substitutions, and breaking up long chains into multiple.
 
+### Feedback, Comments, Improvements?
+
+Please open an issue on the repository, I would be happy to discuss with you.
+
 ---
 
 Thank you to Robin Hilliard for the original inspiration for this project, the one from which this one was forked. Please consider visiting his implementation here: [robinhilliard/pipes](https://github.com/robinhilliard/pipes).
