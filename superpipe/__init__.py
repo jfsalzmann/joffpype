@@ -31,6 +31,7 @@ from inspect import getsource, isclass, stack
 from itertools import takewhile
 from textwrap import dedent
 
+SUB_IDENT: typing.Final[str] = '_'
 
 class _PipeTransformer(NodeTransformer):
     def handle_atom(self, left: AST, atom: AST) -> typing.Tuple[AST, bool]:
@@ -39,7 +40,7 @@ class _PipeTransformer(NodeTransformer):
         Recursively replaces all instances of `_` and `*_`
         """
         if isinstance(atom, Name):
-            if atom.id == "_":
+            if atom.id == SUB_IDENT:
                 return left, True
             else:
                 return atom, False
@@ -58,6 +59,14 @@ class _PipeTransformer(NodeTransformer):
         :param right: Nominally the right side of a BinOp. Target of substitutions.
         :returns: The transformed AST
         """
+
+        # We have to explicitly handle the case
+        # Where the right side is "_"
+        # In that case we just return `left`
+        # So that it is substituted
+        if isinstance(right, Name):
+            if right.id == SUB_IDENT:
+                return left
 
         # _.attr or _[x]
         if isinstance(right, (Attribute, Subscript)):
