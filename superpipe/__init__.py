@@ -27,7 +27,7 @@ from ast import (
     parse,
     walk,
 )
-from inspect import getsource, isclass, stack
+from inspect import getsource, isclass, isfunction, stack
 from itertools import takewhile
 from textwrap import dedent
 
@@ -167,6 +167,12 @@ class _PipeTransformer(NodeTransformer):
 
 
 def is_pipes_decorator(dec: AST) -> bool:
+    """
+    Determines if `dec` is one of our decorators.
+    The check is fairly primitive and relies upon things being named as we expect them.
+    If someone were to do a `from superpipe import pipes as ..` this function would break.
+    :param dec: An AST node to check
+    """
     if isinstance(dec, Name):
         return dec.id == "pipes"
     if isinstance(dec, Attribute):
@@ -180,16 +186,17 @@ def is_pipes_decorator(dec: AST) -> bool:
 # pylint: disable=exec-used
 def pipes(func_or_class):
     """
-    Enables the pipe operator in the decorated function or method
+    Enables the pipe operator in the decorated function, method, or class
     """
     if isclass(func_or_class):
         decorator_frame = stack()[1]
         ctx = decorator_frame[0].f_locals
         first_line_number = decorator_frame[2]
-
-    else:
+    elif isfunction(func_or_class):
         ctx = func_or_class.__globals__
         first_line_number = func_or_class.__code__.co_firstlineno
+    else:
+        raise ValueError(f"@pipes: Expected function or class. Got: {type(func_or_class)}")
 
     source = getsource(func_or_class)
 
