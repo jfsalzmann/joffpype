@@ -30,6 +30,10 @@ Using superpipe:
 range(100) >> filter(lambda x: x.bit_length() % 2 != 0) >> map(lambda x: x * x) >> print("The numbers:", _)
 ```
 
+## Install
+
+Get it on PyPi: https://pypi.org/project/superpipe/
+
 ## Tutorial
 
 ```py
