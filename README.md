@@ -77,7 +77,8 @@ range(3) >> map(lambda x: x)
 ```
 
 ```py
-# > But I don't want it to be the last argument!
+# Oftentimes you may want to do more than simply inject the value as the last argument to a function, well, superpipe can do much more
+
 # You can use the special implicit substitution identifier "_" (an underscore)
 # Superpipe will substitute the lefthand side into where-ever it finds it
 
