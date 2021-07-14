@@ -31,7 +31,7 @@ from inspect import getsource, isclass, stack
 from itertools import takewhile
 from textwrap import dedent
 
-SUB_IDENT: typing.Final[str] = '_'
+SUB_IDENT: str = '_'
 
 class _PipeTransformer(NodeTransformer):
     def handle_atom(self, left: AST, atom: AST) -> typing.Tuple[AST, bool]:
