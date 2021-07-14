@@ -9,6 +9,8 @@ name = "pypi"
 black = "*"
 isort = "*"
 pylint = "*"
+twine = "*"
+build = "*"
 
 [requires]
 python_version = "3.9"
