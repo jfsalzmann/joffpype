@@ -100,6 +100,9 @@ range(3) >> map(lambda x: x)
 5 >> _ + 1
 # The same as 5 + 1
 
+"xyz" >> f"look at this!: {_}. wow."
+# f-strings
+
 [1, 2, 3] >> _[0]
 # This gets the first element out of the list
 
