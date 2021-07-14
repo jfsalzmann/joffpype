@@ -72,6 +72,7 @@ class Loq:
 # This prints "abc, 5"
 
 range(3) >> map(lambda x: x)
+# The operator really shines with functional constructs
 # This is the same as map(lambda x: x, range(3))
 ```
 
