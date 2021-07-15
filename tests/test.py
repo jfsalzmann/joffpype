@@ -8,7 +8,7 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 import unittest
 from unittest import TestCase
 
-from superpipe import pipes
+from superpipe import pipes, foreach
 
 
 # pylint: disable=no-self-argument
@@ -72,6 +72,11 @@ class TestMisc(TestCase):
             x -= 1
         
         assert count == 10
+
+    def test_foreach(self):
+        L = []
+        range(5) >> map(lambda x: x + 1) >> foreach(L.append)
+        assert L == [1, 2, 3, 4, 5]
 
 # fmt: off
     def test_complex(self):
