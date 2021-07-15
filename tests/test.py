@@ -8,7 +8,7 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 import unittest
 from unittest import TestCase
 
-from superpipe import pipes, foreach
+from superpipe import pipes, foreach, is_not_none, square
 
 
 # pylint: disable=no-self-argument
@@ -54,6 +54,7 @@ class TestClasses(TestCase):
 class TestMisc(TestCase):
     def test(self):
         assert 5 >> 2 ** _ >> _.bit_length() == 6
+        assert [1, None, 3, 5, 84, 33] >> filter(is_not_none) >> map(square) >> sum == sum(map(square, [1, 3, 5, 84, 33]))
 
     def test_idempotent(self):
         assert 1 >> _ >> _ >> _ == 1

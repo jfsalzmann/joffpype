@@ -24,6 +24,11 @@ def is_even(n) -> bool:
 def is_odd(n) -> bool:
     return n % 2 != 0
 
+is_truthy = bool
+
+def is_falsy(item) -> bool:
+    return not item
+
 # Operations
 
 def square(x):
