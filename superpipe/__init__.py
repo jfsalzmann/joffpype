@@ -1,5 +1,4 @@
 """Superpipe"""
 
 from .superpipe import pipes
-
-from .utils import foreach, is_none, is_not_none, is_even, is_odd, square, cube, is_falsy, is_truthy
+from .utils import cube, foreach, is_even, is_falsy, is_none, is_not_none, is_odd, is_truthy, square
