@@ -115,8 +115,6 @@ class _PipeTransformer(NodeTransformer):
                 right.args[i], mod = self.handle_atom(left, arg)
                 modified |= mod
 
-            print(modified)
-
             for i, arg in enumerate(right.keywords):
                 right.keywords[i].value, mod = self.handle_atom(left, arg.value)
                 modified |= mod
@@ -245,8 +243,6 @@ def pipes(func_or_class):
     # AST data structure representing parsed function code
     tree = parse(dedent(source))
 
-    print(dump(tree, indent=4))
-
     # Fix line and column numbers so that debuggers still work
     increment_lineno(tree, first_line_number - 1)
     source_indent = sum([1 for _ in takewhile(str.isspace, source)]) + 1
@@ -266,8 +262,6 @@ def pipes(func_or_class):
 
     # Apply the visit_BinOp transformation
     tree = _PipeTransformer().visit(tree)
-
-    print(dump(tree, indent=4))
 
     # now compile the AST into an altered function or class definition
     code = compile(tree, filename=(ctx["__file__"] if "__file__" in ctx else "repl"), mode="exec")
