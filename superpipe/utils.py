@@ -3,10 +3,9 @@
 from typing import Any, Callable, Iterable, TypeVar, Union
 
 T = TypeVar("T")
-S = TypeVar("S")
 
 
-def foreach(f: Callable[T, S], iter: Iterable[T]) -> None:
+def foreach(f: Callable[T], iter: Iterable[T]) -> None:
     """Consumes an iterable. Applies `f` to each element of `iter` and returns nothing"""
     for item in iter:
         f(item)

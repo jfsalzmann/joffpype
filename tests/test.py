@@ -8,7 +8,7 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 import unittest
 from unittest import TestCase
 
-from superpipe import foreach, is_not_none, pipes, square, is_odd
+from superpipe import foreach, is_not_none, is_odd, pipes, square
 
 
 # pylint: disable=no-self-argument
