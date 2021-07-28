@@ -31,6 +31,7 @@ try:
     def bar():
         pass
 
+
 except ValueError:
     pass
 else:
