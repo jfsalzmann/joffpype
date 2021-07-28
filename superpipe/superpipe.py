@@ -26,8 +26,8 @@ from ast import (
     increment_lineno,
     parse,
     walk,
-    Lambda,
-    dump
+    dump,
+    Lambda
 )
 from inspect import getsource, isclass, isfunction, stack
 from itertools import takewhile
@@ -35,7 +35,12 @@ from textwrap import dedent
 
 SUB_IDENT: str = "_"
 
+from enum import Enum
 
+class Kind(Enum):
+    Left = 0
+    Right = 1
+    Neither = 2
 
 class _PipeTransformer(NodeTransformer):
     def handle_atom(self, left: AST, atom: AST) -> typing.Tuple[AST, bool]:
@@ -53,11 +58,11 @@ class _PipeTransformer(NodeTransformer):
             atom.value, mod = self.handle_atom(left, atom.value)
             return atom, mod
 
-        self.handle_node(left, atom)
-        return atom, False
+        return self.handle_node(left, atom, False)
+        # return atom
 
     # pylint: disable=too-many-branches, too-many-return-statements, invalid-name
-    def handle_node(self, left: AST, right: AST) -> AST:
+    def handle_node(self, left: AST, right: AST, implicit=True) -> typing.Tuple[AST, bool]:
         """
         Recursively handles AST substitutions
         :param left: Nominally the left side of a BinOp. This is substitued into `right`
@@ -71,7 +76,7 @@ class _PipeTransformer(NodeTransformer):
         # So that it is substituted
         if isinstance(right, Name):
             if right.id == SUB_IDENT:
-                return left
+                return left, True
 
         # _.attr or _[x]
         if isinstance(right, (Attribute, Subscript)):
@@ -82,37 +87,43 @@ class _PipeTransformer(NodeTransformer):
             # Transformed into a function call
             # e.g. 5 >> Class.method
             if mod:
-                return right
+                return right, True
+
+        if isinstance(right, Lambda):
+            right.expr, mod = self.handle_atom(left, right.body)
+            # return right, mod
 
         # _ + x
         # x + _
         if isinstance(right, BinOp):
-            if isinstance(right.op, RShift):
-                return self.visit_BinOp(right)
-            right.left, _ = self.handle_atom(left, right.left)
-            right.right, _ = self.handle_atom(left, right.right)
-            return right
-
-        # if isinstance(right, Lambda):
-        #     right.body = self.handle_atom(left, right.body)
-        #     return right
+            # if isinstance(right.op, RShift):
+                # return self.visit_BinOp(right), True
+            mod = False
+            right.left, m = self.handle_atom(left, right.left)
+            mod |= m
+            right.right, m = self.handle_atom(left, right.right)
+            mod |= m
+            return right, mod
 
         if isinstance(right, Call):
 
             # _.func
             if isinstance(right.func, Attribute):
-                right.func.value, mod = self.handle_atom(left, right.func.value)
 
-                # Only exit if we substituted the value of the call
-                # Otherwise, we need to process the arguments
-                if mod:
-                    return right
+                # True if we substituted into _.func
+                # This way we can sub arguments, for stuff like _.func(_)
+                # But avoid adding the implicit argument
+                right.func.value, modified = self.handle_atom(left, right.func.value)
+            else:
+                modified = False
 
-            modified = False
+            # modified |= implicit
 
             for i, arg in enumerate(right.args):
                 right.args[i], mod = self.handle_atom(left, arg)
                 modified |= mod
+
+            print(modified)
 
             for i, arg in enumerate(right.keywords):
                 right.keywords[i].value, mod = self.handle_atom(left, arg.value)
@@ -121,50 +132,76 @@ class _PipeTransformer(NodeTransformer):
             # If we didn't modify any arguments
             # Then we need to insert the left side
             # Into the arguments
-            if not modified:
+            print(locals())
+            if not modified and implicit:
                 right.args.append(left)
+                modified = True
 
-            return right
+            return right, modified
 
         # Lists, Tuples, and Sets
         if isinstance(right, (List, Tuple, Set)):
+            mod = False
             for i, el in enumerate(right.elts):
-                right.elts[i], _ = self.handle_atom(left, el)
-            return right
+                right.elts[i], m = self.handle_atom(left, el)
+                mod |= m
+            return right, mod
 
         # Dictionaries
         if isinstance(right, Dict):
+            mod = False
             for col in [right.keys, right.values]:
                 for i, item in enumerate(col):
-                    col[i], _ = self.handle_atom(left, item)
-            return right
+                    col[i], m = self.handle_atom(left, item)
+                    mod |= m
+            return right, mod
 
         # f-strings
         if isinstance(right, JoinedStr):
+            mod = False
             for i, fvalue in enumerate(right.values):
                 if isinstance(fvalue, FormattedValue):
-                    right.values[i].value, _ = self.handle_atom(left, fvalue.value)
-            return right
+                    right.values[i].value, m = self.handle_atom(left, fvalue.value)
+                    mod |= m
+            return right, mod
 
         # Comprehensions and Generators
         # [x for x in _]
         if isinstance(right, (ListComp, SetComp, DictComp, GeneratorExp)):
-            for i, gen in enumerate(right.generators):
-                gen.iter, _ = self.handle_atom(left, gen.iter)
-            return right
+            mod = False
 
-        # If nothing else, we assume that we need to convert the right side into a function call
-        # e.g. 5 >> print
-        # This will break if the symbol is not callable, as is expected
-        return Call(
-            func=right,
-            args=[left],
-            keywords=[],
-            starargs=None,
-            kwargs=None,
-            lineno=right.lineno,
-            col_offset=right.col_offset,
-        )
+            # handle [THIS for .. in ..] part of the comprehension
+            # Special case for dictionaries because of {THESE : THESE for .. in ..}
+            if isinstance(right, DictComp):
+                right.key, m = self.handle_atom(left, right.key)
+                mod |= m
+                right.value, m = self.handle_atom(left, right.value)
+                mod |= m
+            else:
+                right.elt, m = self.handle_atom(left, right.elt)
+                mod |= m
+
+            for i, gen in enumerate(right.generators):
+                gen.iter, m = self.handle_atom(left, gen.iter)
+                mod |= m
+            
+            return right, mod
+
+        if isinstance(right, (Name, Attribute, Lambda)) and implicit:
+            # If nothing else, we assume that we need to convert the right side into a function call
+            # e.g. 5 >> print
+            # This will break if the symbol is not callable, as is expected
+            return Call(
+                func=right,
+                args=[left],
+                keywords=[],
+                starargs=None,
+                kwargs=None,
+                lineno=right.lineno,
+                col_offset=right.col_offset,
+            ), False
+
+        return right, False
 
     def visit_BinOp(self, node: BinOp) -> AST:
         """
@@ -172,7 +209,8 @@ class _PipeTransformer(NodeTransformer):
         """
         left, op, right = self.visit(node.left), node.op, node.right
         if isinstance(op, RShift):
-            return self.handle_node(left, right)
+            ast, _ = self.handle_node(left, right)
+            return ast
         return node
 
 
