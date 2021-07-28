@@ -59,7 +59,7 @@ class TestMisc(TestCase):
         from random import choice
 
         sample = range(5) >> [None, *_]
-        test_data = sample >> [choice(_) for _x in range(10)]
+        sample >> [choice(_) for _x in range(10)]
 
     def test_idempotent(self):
         assert 1 >> _ >> _ >> _ == 1
@@ -138,6 +138,20 @@ class TestFunctionCalls(TestCase):
             (baz + qux) * bar
 
         assert {"bar": 2, "baz": 9, "qux": 5} >> foo(**_) == foo(bar=2, baz=9, qux=5)
+
+    @pipes
+    def test_substitute_target(self):
+        assert "a" >> _.upper() == "A"
+
+        L = [1, 2, 3]
+        L >> _.extend(L)
+        assert L == [1, 2, 3, 1, 2, 3]
+
+        def index(L):
+            for i in L >> len >> range:
+                assert L >> _.index(_[i]) == i
+
+        index([1, 2, 3, 4, 5])
 
 
 class TestComprehensions(TestCase):
