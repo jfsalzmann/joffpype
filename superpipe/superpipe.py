@@ -12,6 +12,7 @@ from ast import (
     FormattedValue,
     GeneratorExp,
     JoinedStr,
+    Lambda,
     List,
     ListComp,
     LShift,
@@ -23,11 +24,10 @@ from ast import (
     Starred,
     Subscript,
     Tuple,
+    dump,
     increment_lineno,
     parse,
     walk,
-    dump,
-    Lambda
 )
 from inspect import getsource, isclass, isfunction, stack
 from itertools import takewhile
@@ -35,12 +35,6 @@ from textwrap import dedent
 
 SUB_IDENT: str = "_"
 
-from enum import Enum
-
-class Kind(Enum):
-    Left = 0
-    Right = 1
-    Neither = 2
 
 class _PipeTransformer(NodeTransformer):
     def handle_atom(self, left: AST, atom: AST) -> typing.Tuple[AST, bool]:
@@ -48,6 +42,7 @@ class _PipeTransformer(NodeTransformer):
         Handle an "atom".
         Recursively replaces all instances of `_` / `*_` / `**_`
         Will call into `self.handle_node` if necessary
+        Returns the new AST and whether or not any modifications were made to the AST
         """
         if isinstance(atom, Name):
             if atom.id == SUB_IDENT:
@@ -58,8 +53,8 @@ class _PipeTransformer(NodeTransformer):
             atom.value, mod = self.handle_atom(left, atom.value)
             return atom, mod
 
+        # We set implicit=False here so that no nested calls get implicit arguments
         return self.handle_node(left, atom, False)
-        # return atom
 
     # pylint: disable=too-many-branches, too-many-return-statements, invalid-name
     def handle_node(self, left: AST, right: AST, implicit=True) -> typing.Tuple[AST, bool]:
@@ -67,7 +62,8 @@ class _PipeTransformer(NodeTransformer):
         Recursively handles AST substitutions
         :param left: Nominally the left side of a BinOp. This is substitued into `right`
         :param right: Nominally the right side of a BinOp. Target of substitutions.
-        :returns: The transformed AST
+        :param implicit: Determines if the transformer is allowed to append arguments implicitly to function calls, and convert attribute/names/lambdas into calls
+        :returns: The transformed AST, and whether or not any modifications were made to the AST
         """
 
         # We have to explicitly handle the case
@@ -96,8 +92,6 @@ class _PipeTransformer(NodeTransformer):
         # _ + x
         # x + _
         if isinstance(right, BinOp):
-            # if isinstance(right.op, RShift):
-                # return self.visit_BinOp(right), True
             mod = False
             right.left, m = self.handle_atom(left, right.left)
             mod |= m
@@ -117,8 +111,6 @@ class _PipeTransformer(NodeTransformer):
             else:
                 modified = False
 
-            # modified |= implicit
-
             for i, arg in enumerate(right.args):
                 right.args[i], mod = self.handle_atom(left, arg)
                 modified |= mod
@@ -131,8 +123,7 @@ class _PipeTransformer(NodeTransformer):
 
             # If we didn't modify any arguments
             # Then we need to insert the left side
-            # Into the arguments
-            print(locals())
+            # Into the arguments, if implicit is allowed
             if not modified and implicit:
                 right.args.append(left)
                 modified = True
@@ -184,22 +175,25 @@ class _PipeTransformer(NodeTransformer):
             for i, gen in enumerate(right.generators):
                 gen.iter, m = self.handle_atom(left, gen.iter)
                 mod |= m
-            
+
             return right, mod
 
         if isinstance(right, (Name, Attribute, Lambda)) and implicit:
             # If nothing else, we assume that we need to convert the right side into a function call
             # e.g. 5 >> print
             # This will break if the symbol is not callable, as is expected
-            return Call(
-                func=right,
-                args=[left],
-                keywords=[],
-                starargs=None,
-                kwargs=None,
-                lineno=right.lineno,
-                col_offset=right.col_offset,
-            ), False
+            return (
+                Call(
+                    func=right,
+                    args=[left],
+                    keywords=[],
+                    starargs=None,
+                    kwargs=None,
+                    lineno=right.lineno,
+                    col_offset=right.col_offset,
+                ),
+                False,
+            )
 
         return right, False
 
