@@ -130,6 +130,9 @@ class TestFunctionCalls(TestCase):
 
         assert 4 >> range >> list == [0, 1, 2, 3]
 
+        # Implicit call inside an f-string
+        assert f"{2 >> range >> list}" == "[0, 1]"
+
     @pipes
     def test_substitution(self):
         assert 5 >> Utils.div(_, 1) == 5
