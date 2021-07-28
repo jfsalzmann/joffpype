@@ -8,7 +8,7 @@ sys.path.append(path.dirname(path.dirname(path.abspath(__file__))))
 import unittest
 from unittest import TestCase
 
-from superpipe import foreach, is_not_none, pipes, square
+from superpipe import foreach, is_not_none, pipes, square, is_odd
 
 
 # pylint: disable=no-self-argument
@@ -60,6 +60,8 @@ class TestMisc(TestCase):
 
         sample = range(5) >> [None, *_]
         sample >> [choice(_) for _x in range(10)]
+
+        assert range(5) >> filter(is_odd) >> set >> len == 2
 
     def test_idempotent(self):
         assert 1 >> _ >> _ >> _ == 1
