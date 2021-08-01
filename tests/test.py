@@ -145,6 +145,19 @@ class TestFunctionCalls(TestCase):
         assert {"bar": 2, "baz": 9, "qux": 5} >> foo(**_) == foo(bar=2, baz=9, qux=5)
 
     @pipes
+    def test_nested_implicit(self):
+
+        # This should raise a type error
+        # because superpipe should not
+        # create an implicit argument
+        # for nested contexts
+        with self.assertRaises(TypeError):
+            5 >> [0 for _x in range]
+
+        # However, this is fine
+        assert 5 >> [0 for _x in range(_)] == [0, 0, 0, 0, 0]
+
+    @pipes
     def test_substitute_target(self):
         assert "a" >> _.upper() == "A"
 
