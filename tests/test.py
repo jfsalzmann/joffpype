@@ -152,6 +152,7 @@ class TestFunctionCalls(TestCase):
         # create an implicit argument
         # for nested contexts
         with self.assertRaises(TypeError):
+            # pylint: disable=not-an-iterable
             5 >> [0 for _x in range]
 
         # However, this is fine
