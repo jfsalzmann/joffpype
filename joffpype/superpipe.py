@@ -124,9 +124,9 @@ class _PipeTransformer(NodeTransformer):
             # Into the arguments, if implicit is allowed
             if not modified and implicit:
                 if append:
-                    right.args.append(left)
+                    right.args.append(left) ###### original but now for <<
                 else:
-                    right.args.insert(0,left) ####### changed
+                    right.args.insert(0,left) ####### changed for >>
                 modified = True
 
             return right, modified
@@ -203,10 +203,10 @@ class _PipeTransformer(NodeTransformer):
         Visitor method for BinOps. Returns the AST that takes the place of the input expression.
         """
         left, op, right = self.visit(node.left), node.op, node.right
-        if isinstance(op, RShift):
+        if isinstance(op, RShift): ##### original
             ast, _ = self.handle_node(left, right)
             return ast
-        if isinstance(op, LShift):
+        if isinstance(op, LShift): ##### added <<
             ast, _ = self.handle_node(left, right,append=True)
             return ast
         return node
