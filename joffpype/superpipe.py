@@ -1,4 +1,4 @@
-"""Implements an @pipes operator that transforms the >> operator to act similarly to Elixir pipes"""
+"""Implements an @pipes operator that transforms the >> operator to act similarly to Elixir pipes. change by joff: first instead of last argument"""
 
 
 import typing
@@ -123,7 +123,7 @@ class _PipeTransformer(NodeTransformer):
             # Then we need to insert the left side
             # Into the arguments, if implicit is allowed
             if not modified and implicit:
-                right.args.append(left)
+                right.args.insert(0,left) ####### changed
                 modified = True
 
             return right, modified
