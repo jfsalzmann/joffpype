@@ -16,7 +16,7 @@ class Infix(object):
     def __rmod__(self, other):
         return Infix(partial(self.func, other))
     def __call__(self, v1, v2):
-        return self.func(v1, v2)
+        return v1 >> v2
 
 
 @Infix
