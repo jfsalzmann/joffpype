@@ -1,6 +1,7 @@
 """Extension: add a %_% and |_| pipe that can do everything but handling funcs() with parantheses while not requiring @ pipe function blocks"""
 
 from functools import partial
+from .superpipe import pipes
 
 class Infix(object):
     def __init__(self, func):
