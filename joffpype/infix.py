@@ -20,6 +20,6 @@ class Infix(object):
 
 
 @Infix
-#@pipes
+@pipes
 def _(x, f):
     return x >> f
