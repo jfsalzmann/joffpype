@@ -1,0 +1,12 @@
+LICENSE.txt
+README.md
+setup.cfg
+setup.py
+joffpype/__init__.py
+joffpype/infix.py
+joffpype/superpipe.py
+joffpype/utils.py
+joffpype.egg-info/PKG-INFO
+joffpype.egg-info/SOURCES.txt
+joffpype.egg-info/dependency_links.txt
+joffpype.egg-info/top_level.txt
