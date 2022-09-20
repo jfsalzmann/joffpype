@@ -33,7 +33,7 @@ from inspect import getsource, isclass, isfunction, stack
 from itertools import takewhile
 from textwrap import dedent
 
-SUB_IDENT: str = "_"
+SUB_IDENT: str = "__"
 
 
 class _PipeTransformer(NodeTransformer):

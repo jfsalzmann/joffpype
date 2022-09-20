@@ -3,6 +3,7 @@
 from functools import partial
 from .superpipe import pipes
 
+@pipes
 class Infix(object):
     def __init__(self, func):
         self.func = func
@@ -19,6 +20,6 @@ class Infix(object):
 
 
 @Infix
-@pipes
+#@pipes
 def _(x, f):
     return x >> f
