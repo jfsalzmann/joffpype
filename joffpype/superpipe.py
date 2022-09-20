@@ -57,7 +57,7 @@ class _PipeTransformer(NodeTransformer):
         return self.handle_node(left, atom, False)
 
     # pylint: disable=too-many-branches, too-many-return-statements, invalid-name
-    def handle_node(self, left: AST, right: AST, implicit=True) -> typing.Tuple[AST, bool]:
+    def handle_node(self, left: AST, right: AST, implicit=True,append=False) -> typing.Tuple[AST, bool]:
         """
         Recursively handles AST substitutions
         :param left: Nominally the left side of a BinOp. This is substitued into `right`
@@ -123,7 +123,10 @@ class _PipeTransformer(NodeTransformer):
             # Then we need to insert the left side
             # Into the arguments, if implicit is allowed
             if not modified and implicit:
-                right.args.insert(0,left) ####### changed
+                if append:
+                    right.args.append(left)
+                else:
+                    right.args.insert(0,left) ####### changed
                 modified = True
 
             return right, modified
@@ -202,6 +205,9 @@ class _PipeTransformer(NodeTransformer):
         left, op, right = self.visit(node.left), node.op, node.right
         if isinstance(op, RShift):
             ast, _ = self.handle_node(left, right)
+            return ast
+        if isinstance(op, LShift):
+            ast, _ = self.handle_node(left, right,append=True)
             return ast
         return node
 
